@@ -5,9 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -16,10 +24,12 @@ jobs:
           cache: pip
           cache-dependency-path: apps/api/requirements-dev.txt
       - run: pip install -r apps/api/requirements-dev.txt
+      - run: python -m compileall -q apps/api/app
       - run: pytest apps/api/tests -q
 
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/web

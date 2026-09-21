@@ -1,5 +1,7 @@
 # CV Studio
 
+[![CI](https://github.com/y-bakshi/cv-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/y-bakshi/cv-studio/actions/workflows/ci.yml)
+
 CV Studio is a multi-user, LaTeX-backed résumé workspace with visual editing,
 source editing, server-side PDF compilation, revision history, annotations, and
 job-description storage.
