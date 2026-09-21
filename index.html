@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CV Studio — a conversational workspace for tailoring and exporting resumes." />
+  <title>CV Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="library-panel" aria-label="CV library">
+      <div class="brand-row">
+        <div class="brand-mark">CV</div>
+        <span>CV Studio</span>
+        <button class="icon-button sidebar-toggle" aria-label="Collapse sidebar" title="Collapse sidebar">
+          <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+      </div>
+
+      <button class="new-cv-button" id="newCvButton">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        New CV
+        <kbd>⌘ N</kbd>
+      </button>
+
+      <label class="search-box">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="librarySearch" type="search" placeholder="Search your CVs" aria-label="Search your CVs" />
+        <kbd>⌘ K</kbd>
+      </label>
+
+      <nav class="library-nav">
+        <button class="nav-item active" data-filter="all">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>
+          All documents
+          <span class="count" id="allCount">0</span>
+        </button>
+        <button class="nav-item" data-filter="starred">
+          <svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>
+          Starred
+          <span class="count" id="starredCount">0</span>
+        </button>
+      </nav>
+
+      <div class="section-label">
+        <span>Folders</span>
+        <button class="small-icon" aria-label="Add folder">+</button>
+      </div>
+      <div class="folder-list">
+        <button class="folder-row expanded">
+          <span class="chevron">›</span><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v10H3z"/></svg>
+          2026 Applications <span>8</span>
+        </button>
+        <div class="folder-children">
+          <button class="folder-row"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v10H3z"/></svg> Software Engineering <span>4</span></button>
+          <button class="folder-row"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v10H3z"/></svg> Cloud &amp; Systems <span>2</span></button>
+          <button class="folder-row"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v10H3z"/></svg> On-campus <span>2</span></button>
+        </div>
+        <button class="folder-row"><span class="chevron">›</span><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v10H3z"/></svg> Master versions <span>2</span></button>
+        <button class="folder-row"><span class="chevron">›</span><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v10H3z"/></svg> Archived <span>2</span></button>
+      </div>
+
+      <div class="section-label recent-label"><span>Recent</span><button class="small-icon">•••</button></div>
+      <div class="document-list" id="documentList"><div class="library-loading">Loading your CVs…</div></div>
+
+      <div class="profile-row">
+        <span class="avatar">YB</span>
+        <span><strong>Yash Bakshi</strong><small>Personal workspace</small></span>
+        <button class="small-icon">•••</button>
+      </div>
+    </aside>
+
+    <section class="chat-panel" aria-label="CV assistant">
+      <header class="panel-header">
+        <div><span class="eyebrow">Editing with AI</span><h1 id="chatTitle">Software Engineer · Thryv</h1></div>
+        <button class="icon-button" aria-label="More options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+      </header>
+
+      <div class="chat-scroll" id="chatScroll">
+        <div class="date-divider"><span>Today</span></div>
+        <article class="assistant-message">
+          <span class="assistant-avatar">✦</span>
+          <div>
+            <p>I’ve opened your <strong>Thryv Software Engineer</strong> CV. It’s currently one page with a strong backend and cloud focus.</p>
+            <p>What would you like to improve?</p>
+          </div>
+        </article>
+        <div class="suggestion-grid">
+          <button data-prompt="Make my experience bullets more concise">Tighten experience bullets <span>→</span></button>
+          <button data-prompt="Tailor this CV to a backend engineer role">Tailor for backend roles <span>→</span></button>
+          <button data-prompt="Review this CV for ATS issues">Run an ATS review <span>→</span></button>
+          <button data-prompt="Improve the professional summary">Improve the summary <span>→</span></button>
+        </div>
+        <div id="messages"></div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="composer">
+          <textarea id="chatInput" rows="1" placeholder="Ask me to improve, rewrite, or tailor…"></textarea>
+          <div class="composer-actions">
+            <div>
+              <button class="icon-button" id="attachButton" aria-label="Attach job description" title="Attach job description"><svg viewBox="0 0 24 24"><path d="m10 13 5-5a3 3 0 0 1 4 4l-7 7a5 5 0 0 1-7-7l7-7"/></svg></button>
+              <input type="file" id="jobFileInput" accept=".txt,.md,.text" hidden />
+              <button class="context-pill" id="contextPill"><span></span> CV context</button>
+            </div>
+            <button class="send-button" id="sendButton" aria-label="Send message"><svg viewBox="0 0 24 24"><path d="m5 12 14-7-4 14-3-6z"/></svg></button>
+          </div>
+        </div>
+        <small class="composer-note">AI suggestions can make mistakes. Review changes before exporting.</small>
+      </div>
+    </section>
+
+    <main class="canvas-panel">
+      <header class="canvas-header">
+        <div class="doc-title-wrap">
+          <button class="icon-button mobile-library" aria-label="Open library"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+          <span class="status-dot"></span>
+          <input id="documentTitle" value="Yash Bakshi — Software Engineer" aria-label="Document title" />
+          <span class="saved-state" id="savedState">Saved</span>
+        </div>
+        <div class="header-actions">
+          <div class="view-switcher" aria-label="View mode">
+            <button class="active" data-view="edit">Edit</button><button data-view="preview">Preview</button>
+          </div>
+          <button class="share-button" id="shareButton"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L8 8m4-4 4 4M5 13v7h14v-7"/></svg> Share</button>
+          <button class="download-button" id="downloadButton"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg> Download PDF</button>
+        </div>
+      </header>
+
+      <div class="format-toolbar" id="formatToolbar">
+        <select id="fontSelect" aria-label="Font family"><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="DM Sans">DM Sans</option></select>
+        <span class="toolbar-separator"></span>
+        <button data-command="bold" aria-label="Bold"><strong>B</strong></button>
+        <button data-command="italic" aria-label="Italic"><em>I</em></button>
+        <button data-command="underline" aria-label="Underline"><u>U</u></button>
+        <button data-command="hiliteColor" data-value="#fff0a8" aria-label="Highlight" class="highlight-tool">A<span></span></button>
+        <span class="toolbar-separator"></span>
+        <button data-command="insertUnorderedList" aria-label="Bulleted list"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg></button>
+        <button data-command="undo" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M5 12h9a5 5 0 0 1 5 5"/></svg></button>
+        <button data-command="redo" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 7 5 5-5 5m4-5h-9a5 5 0 0 0-5 5"/></svg></button>
+        <span class="toolbar-spacer"></span>
+        <span class="zoom-label">100%</span>
+      </div>
+
+      <div class="canvas-scroll">
+        <div class="paper" id="resumePaper" contenteditable="true" spellcheck="true">
+          <section class="resume-header">
+            <h1>YASH BAKSHI</h1>
+            <p class="headline">SOFTWARE ENGINEER · BACKEND &amp; CLOUD SYSTEMS</p>
+            <p class="contact">Tempe, AZ&nbsp;&nbsp; • &nbsp;&nbsp;623-275-5694&nbsp;&nbsp; • &nbsp;&nbsp;bakshi.yash@outlook.com&nbsp;&nbsp; • &nbsp;&nbsp;linkedin.com/in/yash-bakshi-56615a62</p>
+          </section>
+
+          <section>
+            <h2>SUMMARY</h2>
+            <p>Software engineer and Computer Software Engineering graduate student with 3+ years of experience building backend services, cloud infrastructure, and enterprise platforms. Proven record delivering independent deployment pipelines, API quality gates, and automation across production systems.</p>
+          </section>
+
+          <section>
+            <h2>EXPERIENCE</h2>
+            <div class="role-heading"><strong>Software Engineering Intern</strong><span>May 2026 – Aug 2026</span></div>
+            <div class="company-heading"><strong>Thryv</strong><span>Tempe, AZ</span></div>
+            <ul>
+              <li>Delivered independent deployment workflows for <mark>five production Java/Micronaut microservices</mark>, with the first implementation adopted as the reference across the team.</li>
+              <li>Designed gated CircleCI promotion pipelines with approval checkpoints and immutable SHA-based artifact promotion.</li>
+              <li>Built hermetic JMH and K6 performance gates for four services by replacing external dependencies with deterministic in-process stubs.</li>
+              <li>Shipped OpenAPI compatibility checks across six specifications, protecting 100+ REST operations from breaking changes.</li>
+            </ul>
+            <div class="role-heading"><strong>Technical Team Lead</strong><span>Jun 2024 – Dec 2024</span></div>
+            <div class="company-heading"><strong>InfoCenter — an Insight Company</strong><span>Pune, India</span></div>
+            <ul>
+              <li>Directed an 8-member cross-functional team and mentored 12 junior developers, reducing escalations by 30% through structured coaching.</li>
+              <li>Standardized troubleshooting and root-cause workflows, reducing cumulative issue-resolution time by eight hours per day.</li>
+              <li>Established code-review standards that contributed to zero critical post-deployment defects.</li>
+            </ul>
+            <div class="role-heading"><strong>ServiceNow Developer</strong><span>Sep 2022 – May 2024</span></div>
+            <div class="company-heading"><strong>Tata Consultancy Services</strong><span>Pune, India</span></div>
+            <ul>
+              <li>Engineered a Python network-discovery tool with 99% data accuracy across 10,000+ devices in isolated environments.</li>
+              <li>Built REST integrations and workflow automation across ServiceNow ITSM and ITOM, reducing recurring manual effort by 40%.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>EDUCATION</h2>
+            <div class="role-heading"><strong>Arizona State University</strong><span>Expected Dec 2026</span></div>
+            <div class="company-heading"><span>MS, Computer Software Engineering</span><span>Tempe, AZ</span></div>
+            <div class="role-heading education-second"><strong>Manipal University Jaipur</strong><span>Aug 2021</span></div>
+            <div class="company-heading"><span>Bachelor of Information Technology</span><span>Jaipur, India</span></div>
+          </section>
+
+          <section>
+            <h2>TECHNICAL SKILLS</h2>
+            <p><strong>Languages:</strong> Java, Python, Rust, C/C++, TypeScript, JavaScript, Bash</p>
+            <p><strong>Cloud &amp; Infrastructure:</strong> AWS, GCP, Docker, Kubernetes, Terraform, CircleCI, Kafka</p>
+            <p><strong>Backend &amp; Data:</strong> Micronaut, FastAPI, Node.js, REST, PostgreSQL, Neo4j, ServiceNow</p>
+          </section>
+        </div>
+        <p class="page-note"><span>1</span> of 1 · Letter</p>
+      </div>
+
+      <div class="selection-popover" id="selectionPopover" hidden>
+        <button id="quickHighlight"><span></span> Highlight</button>
+        <button id="askAssistant">✦ Ask AI</button>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
