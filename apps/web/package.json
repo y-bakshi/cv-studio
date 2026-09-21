@@ -24,14 +24,15 @@
     "@tiptap/starter-kit": "latest",
     "class-variance-authority": "latest",
     "clsx": "latest",
-    "lucide-react": "latest",
+    "lucide": "^1.47.0",
+    "morphicons": "^1.7.1",
     "next-themes": "^0.4.6",
     "react": "latest",
     "react-dom": "latest",
     "react-pdf": "latest",
     "sonner": "^2.0.8",
-    "tailwind-merge": "latest"
-    ,"tw-animate-css": "latest"
+    "tailwind-merge": "latest",
+    "tw-animate-css": "latest"
   },
   "devDependencies": {
     "@tailwindcss/vite": "latest",
