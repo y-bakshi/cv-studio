@@ -11,11 +11,26 @@ from httpx import ASGITransport, AsyncClient
 
 from app.database import Base, engine
 from app.main import app
+from app.latex import document_to_tex
 
 
 def setup_module():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+
+
+def test_formatted_heading_preserves_latex_command_case():
+    document = {
+        "type": "doc",
+        "content": [{
+            "type": "heading",
+            "attrs": {"level": 2},
+            "content": [{"type": "text", "text": "Summary", "marks": [{"type": "bold"}]}],
+        }],
+    }
+    source = document_to_tex(document)
+    assert r"\section{\textbf{Summary}}" in source
+    assert r"\TEXTBF" not in source
 
 
 @pytest.mark.anyio

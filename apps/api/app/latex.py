@@ -41,7 +41,7 @@ def document_to_tex(document: dict) -> str:
         text = content_text(node)
         if kind == "heading":
             level = node.get("attrs", {}).get("level", 2)
-            body.append(rf"\begin{{center}}{{\Huge\textbf{{{text}}}}}\end{{center}}" if level == 1 else rf"\section{{{text.upper()}}}")
+            body.append(rf"\begin{{center}}{{\Huge\textbf{{{text}}}}}\end{{center}}" if level == 1 else rf"\section{{{text}}}")
         elif kind == "paragraph":
             body.append(text + r"\par")
         elif kind in {"bulletList", "orderedList"}:
@@ -104,4 +104,3 @@ def compile_tex(source: str, output_path: Path) -> tuple[bool, str]:
             return True, "\n".join(logs)
         except (subprocess.TimeoutExpired, FileNotFoundError) as error:
             return False, f"Compilation failed: {error}"
-
