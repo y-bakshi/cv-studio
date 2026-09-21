@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cvstudio
+      POSTGRES_PASSWORD: cvstudio
+      POSTGRES_DB: cvstudio
+    ports:
+      - "5432:5432"
+    volumes:
+      - cvstudio_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cvstudio"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - cvstudio_redis:/data
+
+volumes:
+  cvstudio_postgres:
+  cvstudio_redis:
+
