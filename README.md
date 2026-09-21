@@ -51,8 +51,8 @@ the user will approve a structured diff before a proposal changes a CV.
 ```text
 cv-studio/
 ├── apps/
-│   ├── api/                    # FastAPI service and integration tests
-│   └── web/                    # React/Vite client and shadcn components
+│   ├── api/                    # FastAPI routes, domain services, and tests
+│   └── web/                    # React features, shared components, and API client
 ├── artifacts/                  # generated PDFs; ignored by Git
 ├── legacy-prototype/           # original dependency-free UX prototype
 ├── compose.yml                 # PostgreSQL and Redis development services
@@ -61,6 +61,49 @@ cv-studio/
 ```
 
 `PLAN.md` is intentionally local-only and ignored by Git.
+
+## Architecture
+
+The API uses a small layered structure:
+
+- `routers/` owns HTTP concerns: authentication, validation dependencies,
+  status codes, and response handling.
+- `services/` owns reusable operations such as revision snapshots, upload text
+  extraction, and queued LaTeX compilation.
+- `schemas.py` defines request contracts; `serializers.py` defines safe response
+  shapes; `models.py` is persistence only.
+- `main.py` creates the application and registers routers. It should not contain
+  feature logic.
+
+The web client is organized by responsibility:
+
+- `features/workspace/` owns the editor workspace, its controller hook, and
+  feature-level views.
+- `features/assistant/` contains the provider-independent proposal contract for
+  the future AI workflow.
+- `components/` contains reusable product components, while `components/ui/`
+  contains shadcn primitives.
+- `lib/api.ts` is transport only and `lib/types.ts` contains shared client-side
+  domain types.
+
+Comments document security boundaries, lifecycle behavior, or non-obvious
+decisions. Routine code is kept readable instead of being narrated line by line.
+
+## Planned work
+
+Actionable `TODO(...)` markers in the code identify the intended integration
+boundaries:
+
+- `TODO(database-migrations)` — replace startup `create_all` with Alembic.
+- `TODO(durable-compilation)` — move compilation to a Redis-backed, sandboxed
+  worker.
+- `TODO(realtime-compilation)` — replace client polling with server events.
+- `TODO(job-link-ingestion)` — accept job-posting URLs with SSRF-safe fetching.
+- `TODO(ai-provider)` — add Ollama and hosted adapters that return structured,
+  user-approved changes.
+
+These are deliberately not fake implementations. In particular, no model output
+will write directly to a CV; the assistant contract produces reviewable proposals.
 
 ## Requirements
 

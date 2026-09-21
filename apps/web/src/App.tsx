@@ -1,40 +1,39 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Braces, Check, CircleCheck, Download, FileText, History, LoaderCircle, Play, Save, Star, StarOff } from 'lucide'
-import Auth from './components/Auth'
-import Library from './components/Library'
-import VisualEditor from './components/VisualEditor'
-import Assistant from './components/Assistant'
-import PDFPreview from './components/PDFPreview'
-import { MorphGlyph } from './components/MorphGlyph'
-import { Annotation, api, APIError, Compilation, CV, CVSummary, JobDescription, Revision, User } from './lib/api'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useEffect, useState } from 'react'
+import { LoaderCircle } from 'lucide'
 
-type Mode='visual'|'tex'|'pdf'
-export default function App(){
-  const [user,setUser]=useState<User|null>(null); const [loading,setLoading]=useState(true); const [items,setItems]=useState<CVSummary[]>([]); const [cv,setCV]=useState<CV|null>(null); const [mode,setMode]=useState<Mode>('visual'); const [dirty,setDirty]=useState(false); const [saving,setSaving]=useState(false); const [selection,setSelection]=useState({text:'',from:0,to:0}); const [annotations,setAnnotations]=useState<Annotation[]>([]); const [jobs,setJobs]=useState<JobDescription[]>([]); const [revisions,setRevisions]=useState<Revision[]>([]); const [showHistory,setShowHistory]=useState(false); const [notice,setNotice]=useState(''); const saveTimer=useRef<number|undefined>(undefined);
-  const notify=(value:string)=>{setNotice(value);window.setTimeout(()=>setNotice(''),2500)}
-  const refreshList=useCallback(async()=>setItems(await api<CVSummary[]>('/api/cvs')),[])
-  useEffect(()=>{api<User>('/api/auth/me').then(setUser).catch(()=>{}).finally(()=>setLoading(false))},[])
-  useEffect(()=>{if(user)refreshList()},[user,refreshList])
-  async function openCV(id:string){if(dirty)await save();const data=await api<CV>(`/api/cvs/${id}`);setCV(data);setDirty(false);setAnnotations(await api(`/api/cvs/${id}/annotations`));setJobs(await api(`/api/cvs/${id}/job-descriptions`));setRevisions(await api(`/api/cvs/${id}/revisions`))}
-  useEffect(()=>{if(items.length&&!cv)openCV(items[0].id)},[items])
-  async function create(){const created=await api<CV>('/api/cvs',{method:'POST',body:JSON.stringify({title:'Untitled CV'})});await refreshList();setCV(created);setAnnotations([]);setJobs([]);setRevisions([])}
-  function scheduleSave(next:CV){setCV(next);setDirty(true);window.clearTimeout(saveTimer.current);saveTimer.current=window.setTimeout(()=>save(next),900)}
-  async function save(snapshot=cv):Promise<CV|null>{if(!snapshot||saving)return snapshot;setSaving(true);try{const saved=await api<CV>(`/api/cvs/${snapshot.id}`,{method:'PATCH',body:JSON.stringify({title:snapshot.title,folder:snapshot.folder,document:snapshot.document,tex_source:mode==='tex'?snapshot.tex_source:undefined,starred:snapshot.starred,expected_version:snapshot.version})});setCV(saved);setDirty(false);await refreshList();return saved}catch(error){if(error instanceof APIError&&error.status===409)notify('Conflict detected — reopen the CV before saving');else notify(error instanceof Error?error.message:'Save failed');return null}finally{setSaving(false)}}
-  async function compile(){if(!cv)return;const current=dirty?(await save())||cv:cv;const item=await api<Compilation>(`/api/cvs/${current.id}/compile`,{method:'POST'});setCV({...current,latest_compilation:item});setMode('pdf');pollCompilation(item.id)}
-  async function pollCompilation(id:string){for(let count=0;count<40;count++){await new Promise(r=>setTimeout(r,750));const item=await api<Compilation>(`/api/compilations/${id}`);setCV(current=>current?{...current,latest_compilation:item}:current);if(item.status==='success'){notify('PDF compiled successfully');return}if(item.status==='failed'){notify('Compilation failed — inspect the log');return}}}
-  async function logout(){await api('/api/auth/logout',{method:'POST'});setUser(null);setItems([]);setCV(null)}
-  async function annotate(note:string){if(!cv||!selection.text)return;const item=await api<Annotation>(`/api/cvs/${cv.id}/annotations`,{method:'POST',body:JSON.stringify({quoted_text:selection.text,start_offset:selection.from,end_offset:selection.to,note})});setAnnotations([item,...annotations]);setSelection({text:'',from:0,to:0})}
-  async function updateAnnotation(id:string){const item=await api<Annotation>(`/api/annotations/${id}`,{method:'PATCH',body:JSON.stringify({resolved:true})});setAnnotations(annotations.map(a=>a.id===id?item:a))}
-  async function deleteAnnotation(id:string){await api(`/api/annotations/${id}`,{method:'DELETE'});setAnnotations(annotations.filter(a=>a.id!==id))}
-  async function addJob(value:{title:string;content:string}|File){if(!cv)return;let item:JobDescription;if(value instanceof File){const data=new FormData();data.append('file',value);item=await api(`/api/cvs/${cv.id}/job-descriptions/upload`,{method:'POST',body:data})}else item=await api(`/api/cvs/${cv.id}/job-descriptions`,{method:'POST',body:JSON.stringify(value)});setJobs([item,...jobs]);notify('Job description saved')}
-  async function restore(revision:Revision){if(!cv)return;const restored=await api<CV>(`/api/cvs/${cv.id}/revisions/${revision.id}/restore`,{method:'POST'});setCV(restored);setDirty(false);setShowHistory(false);setRevisions(await api(`/api/cvs/${cv.id}/revisions`));notify(`Restored version ${revision.version}`)}
-  if(loading)return <div className="loading-screen"><MorphGlyph icon={LoaderCircle} className="spin"/>Loading CV Studio</div>
-  if(!user)return <Auth onAuthenticated={u=>{setUser(u);setLoading(false)}}/>
-  const compiling=cv?.latest_compilation?.status==='queued'||cv?.latest_compilation?.status==='compiling'
-  const compileIcon=compiling?LoaderCircle:cv?.latest_compilation?.status==='success'?CircleCheck:Play
-  const saveIcon=saving?LoaderCircle:dirty?Save:Check
-  return <div className="app-shell"><Library user={user} items={items} activeId={cv?.id} onOpen={openCV} onCreate={create} onLogout={logout}/><main className="workspace"><header className="topbar"><div className="title-area">{cv?<><span className="status-dot"/><input value={cv.title} onChange={e=>scheduleSave({...cv,title:e.target.value})}/><button className={cv.starred?'starred':''} onClick={()=>scheduleSave({...cv,starred:!cv.starred})} aria-label={cv.starred?'Remove from favorites':'Add to favorites'}><MorphGlyph icon={cv.starred?Star:StarOff} size={15} fill={cv.starred?'currentColor':'none'}/></button><small>{saving?'Saving…':dirty?'Unsaved':`Saved · v${cv.version}`}</small></>:<strong>Select or create a CV</strong>}</div>{cv&&<div className="top-actions"><Tabs value={mode} onValueChange={value=>setMode(value as Mode)}><TabsList><TabsTrigger value="visual"><MorphGlyph icon={FileText}/>Visual</TabsTrigger><TabsTrigger value="tex"><MorphGlyph icon={Braces}/>TeX</TabsTrigger><TabsTrigger value="pdf"><MorphGlyph icon={FileText}/>PDF</TabsTrigger></TabsList></Tabs><Button variant="outline" size="sm" onClick={()=>setShowHistory(true)}><MorphGlyph icon={History}/>History</Button><Button variant="outline" size="sm" onClick={()=>save()} disabled={!dirty}><MorphGlyph icon={saveIcon} className={saving?'spin':undefined}/>Save</Button><Button size="sm" onClick={compile} disabled={saving||compiling}><MorphGlyph icon={compileIcon} className={compiling?'spin':undefined}/>{compiling?'Compiling':'Recompile'}</Button>{cv.latest_compilation?.status==='success'&&<Button size="sm" asChild><a href={cv.latest_compilation.download_url!}><MorphGlyph icon={Download}/>Download</a></Button>}</div>}</header><div className="workbody">{!cv?<section className="welcome"><span>CV</span><h1>Create your first LaTeX-backed résumé</h1><p>Your revisions, annotations, source, and compiled PDFs stay together.</p><Button onClick={create}>Create CV</Button></section>:<><section className="editor-panel">{mode==='visual'&&<VisualEditor content={cv.document} onChange={document=>scheduleSave({...cv,document})} onSelection={(text,from,to)=>setSelection({text,from,to})}/>} {mode==='tex'&&<div className="tex-mode"><div className="mode-warning">Advanced mode: visual edits regenerate TeX. Save source changes before switching modes.</div><textarea spellCheck={false} value={cv.tex_source} onChange={e=>{setCV({...cv,tex_source:e.target.value});setDirty(true)}}/></div>} {mode==='pdf'&&<PDFPreview compilation={cv.latest_compilation}/>}</section><Assistant annotations={annotations} jobs={jobs} selection={selection.text} onAnnotate={annotate} onResolve={updateAnnotation} onDelete={deleteAnnotation} onAddJob={addJob}/></>}</div><Sheet open={showHistory} onOpenChange={setShowHistory}><SheetContent><SheetHeader><SheetTitle>Revision history</SheetTitle></SheetHeader><div className="history-list">{revisions.map(r=><button key={r.id} onClick={()=>restore(r)}><strong>Version {r.version}</strong><small>{new Date(r.created_at).toLocaleString()}</small></button>)}</div></SheetContent></Sheet></main>{notice&&<div className="toast">{notice}</div>}</div>
+import Auth from './components/Auth'
+import { MorphGlyph } from './components/MorphGlyph'
+import { Workspace } from './features/workspace/Workspace'
+import { api } from './lib/api'
+import type { User } from './lib/types'
+
+export default function App() {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api<User>('/api/auth/me')
+      .then(setUser)
+      .catch(() => undefined)
+      .finally(() => setLoading(false))
+  }, [])
+
+  const logout = async () => {
+    await api('/api/auth/logout', { method: 'POST' })
+    setUser(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <MorphGlyph icon={LoaderCircle} className="spin" />Loading CV Studio
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Auth onAuthenticated={setUser} />
+  }
+
+  return <Workspace user={user} onLogout={() => void logout()} />
 }
