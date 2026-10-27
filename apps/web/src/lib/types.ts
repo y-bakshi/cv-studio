@@ -58,3 +58,17 @@ export type TextSelection = {
   from: number
   to: number
 }
+
+export interface Resume {
+  contact: {
+    name: string; subtitle: string; email: string; phone: string; location: string
+    tags: string[]; links: { id: string; label: string; url: string }[]
+  }
+  skills: { id: string; name: string; skills: string[] }[]
+  experience: { id: string; company: string; role: string; location: string; start: string; end: string; summary: string; bullets: string[] }[]
+  projects: { id: string; name: string; link_text: string; organization: string; location: string; start: string; end: string; bullets: string[] }[]
+  education: { id: string; school: string; degree: string; location: string; start: string; end: string; gpa: string; achievements: string[]; coursework: string[]; bullets: string[] }[]
+  section_order: string[]
+}
+
+export interface ResumeDocument { id: string; version: number; resume: Resume }

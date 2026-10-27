@@ -48,6 +48,18 @@ class CVDocument(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class CVSection(Base):
+    """One JSON document per résumé section (contact, skills, experience, ...)."""
+
+    __tablename__ = "cv_sections"
+    __table_args__ = (UniqueConstraint("cv_id", "name"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_string)
+    cv_id: Mapped[str] = mapped_column(ForeignKey("cv_documents.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(40))
+    data_json: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class CVRevision(Base):
     __tablename__ = "cv_revisions"
     __table_args__ = (UniqueConstraint("cv_id", "version"),)

@@ -84,3 +84,42 @@ async def test_user_isolation():
     second = await client.post("/api/auth/register", json={"email": "second@example.com", "password": "password-two"})
     assert second.status_code == 201
     assert (await client.get(f"/api/cvs/{cv_id}")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_resume_sections_are_stored_separately_and_loaded_whole():
+  async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    await client.post("/api/auth/register", json={"email": "resume@example.com", "password": "correct-horse"})
+    cv = (await client.post("/api/cvs", json={"title": "Structured"})).json()
+
+    empty = (await client.get(f"/api/cvs/{cv['id']}/resume")).json()
+    assert set(empty["resume"]) == {"contact", "skills", "experience", "projects", "education", "section_order"}
+
+    skills = [{"name": "Languages", "skills": ["Python", "Rust"]}]
+    saved = await client.put(
+        f"/api/cvs/{cv['id']}/resume/sections/skills",
+        json={"data": skills, "expected_version": empty["version"]},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["resume"]["skills"][0]["skills"] == ["Python", "Rust"]
+    assert saved.json()["version"] == empty["version"] + 1
+
+    stale = await client.put(
+        f"/api/cvs/{cv['id']}/resume/sections/contact",
+        json={"data": {"name": "Ada"}, "expected_version": empty["version"]},
+    )
+    assert stale.status_code == 409
+
+    invalid = await client.put(
+        f"/api/cvs/{cv['id']}/resume/sections/contact",
+        json={"data": {"nope": 1}, "expected_version": saved.json()["version"]},
+    )
+    assert invalid.status_code == 422
+    missing = await client.put(
+        f"/api/cvs/{cv['id']}/resume/sections/unknown",
+        json={"data": {}, "expected_version": saved.json()["version"]},
+    )
+    assert missing.status_code == 404
+
+    whole = (await client.get(f"/api/cvs/{cv['id']}/resume")).json()
+    assert whole["resume"]["skills"][0]["name"] == "Languages"
