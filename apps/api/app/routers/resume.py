@@ -136,7 +136,9 @@ async def replace_tex(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"message": str(error), "line": error.line},
         )
-    resume = write_sections(db, cv, parsed.resume.to_sections(), parsed.preamble)
+    sections = parsed.resume.to_sections()
+    sections.pop("style")  # presentation lives outside the LaTeX content dialect
+    resume = write_sections(db, cv, sections, parsed.preamble)
     db.commit()
     return _tex_payload(cv, resume)
 

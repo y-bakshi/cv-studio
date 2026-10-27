@@ -21,6 +21,7 @@ def write_sections(
     cv: CVDocument,
     sections: dict[str, object],
     preamble: str | None = None,
+    tex_source: str | None = None,
 ) -> Resume:
     """Upsert the given sections, regenerate the LaTeX and bump the version once."""
     existing = {
@@ -36,7 +37,12 @@ def write_sections(
             row.data_json = payload
     db.flush()
     resume = load_resume(db, cv)
-    cv.tex_source = resume_to_tex(resume, preamble or extract_preamble(cv.tex_source))
+    if "style" in sections and preamble is None:
+        preamble = None  # a style change regenerates the preamble from the options
+    elif preamble is None:
+        preamble = extract_preamble(cv.tex_source)
+    cv.tex_source = tex_source or resume_to_tex(resume, preamble)
+    cv.document_json = resume.to_json(indent=None)
     cv.version += 1
     cv.updated_at = utcnow()
     snapshot_revision(db, cv)

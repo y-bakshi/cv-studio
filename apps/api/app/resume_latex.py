@@ -21,29 +21,48 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .resume import Contact, Resume
+from .resume import Contact, Resume, Style
 
 PREAMBLE_BEGIN = "%%% BEGIN PREAMBLE (free-form: packages, fonts, margins)"
 PREAMBLE_END = "%%% END PREAMBLE"
 MACROS_BEGIN = "%%% BEGIN MACROS (managed by CV Studio)"
 MACROS_END = "%%% END MACROS"
 
-DEFAULT_PREAMBLE = r"""\documentclass[10pt,letterpaper]{article}
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage[margin=0.55in]{geometry}
-\usepackage{xcolor}
-\usepackage{titlesec}
-\usepackage[hidelinks]{hyperref}
-\usepackage[scaled=0.92]{helvet}
-\renewcommand{\familydefault}{\sfdefault}
-\setlength{\parindent}{0pt}
-\titleformat{\section}{\bfseries\large}{}{0pt}{}[\titlerule]
-\titlespacing{\section}{0pt}{7pt}{3pt}
-\input{glyphtounicode}
-\pdfgentounicode=1"""
+_FONTS = {
+    "sans": r"\usepackage[scaled=0.92]{helvet}" + "\n" + r"\renewcommand{\familydefault}{\sfdefault}",
+    "serif": r"\usepackage{mathptmx}",
+    "classic": r"\usepackage{palatino}",
+}
+_BULLETS = {"dot": r"\textbullet", "dash": r"\textendash", "square": r"\ensuremath{\blacksquare}"}
 
-MACROS = r"""\newif\ifskillfirst
+
+def build_preamble(style: Style) -> str:
+    """Free-form LaTeX preamble generated from the style options."""
+    margin, before, after = ("0.4in", "4pt", "2pt") if style.template == "compact" else ("0.55in", "7pt", "3pt")
+    accent = style.accent.lstrip("#").upper()
+    return "\n".join([
+        rf"\documentclass[{style.font_size}pt,{style.paper}paper]{{article}}",
+        r"\usepackage[T1]{fontenc}",
+        r"\usepackage[utf8]{inputenc}",
+        rf"\usepackage[margin={margin}]{{geometry}}",
+        r"\usepackage{xcolor}",
+        r"\usepackage{titlesec}",
+        r"\usepackage[hidelinks]{hyperref}",
+        _FONTS[style.font],
+        rf"\definecolor{{accent}}{{HTML}}{{{accent}}}",
+        rf"\newcommand{{\resumebulletmark}}{{{_BULLETS[style.bullet]}}}",
+        r"\setlength{\parindent}{0pt}",
+        r"\titleformat{\section}{\bfseries\large\color{accent}}{}{0pt}{}[\color{accent}\titlerule]",
+        rf"\titlespacing{{\section}}{{0pt}}{{{before}}}{{{after}}}",
+        r"\input{glyphtounicode}",
+        r"\pdfgentounicode=1",
+    ])
+
+
+DEFAULT_PREAMBLE = build_preamble(Style())
+
+MACROS = r"""\providecommand{\resumebulletmark}{\textbullet}
+\newif\ifskillfirst
 \newif\ifcoursefirst
 \newcommand{\resumedates}[2]{\ifx\relax#1#2\relax\else #1 -- #2\fi}
 \newif\ifcontactfirst
@@ -60,7 +79,7 @@ MACROS = r"""\newif\ifskillfirst
 \newcommand{\resumeeducation}[7][]{\par\medskip\noindent\textbf{#2}\hfill\resumedates{#5}{#6}\par\noindent\textit{#3}\hfill #4\par\ifx\relax#7\relax\else GPA: #7\par\fi\coursefirsttrue}
 \newcommand{\resumeachievement}[1]{\par\noindent #1}
 \newcommand{\resumecourse}[1]{\ifcoursefirst\par\noindent\textit{Coursework:} \coursefirstfalse\else, \fi #1}
-\newcommand{\resumebullet}[1]{\par\noindent\hangindent=1.2em\hangafter=1 \textbullet\ #1\par}"""
+\newcommand{\resumebullet}[1]{\par\noindent\hangindent=1.2em\hangafter=1 \resumebulletmark\ #1\par}"""
 
 
 class DialectError(ValueError):
@@ -161,7 +180,7 @@ def resume_to_tex(resume: Resume, preamble: str | None = None) -> str:
             body += lines
 
     return "\n".join([
-        PREAMBLE_BEGIN, (preamble or DEFAULT_PREAMBLE).strip("\n"), PREAMBLE_END,
+        PREAMBLE_BEGIN, (preamble or build_preamble(resume.style)).strip("\n"), PREAMBLE_END,
         MACROS_BEGIN, MACROS, MACROS_END,
         r"\begin{document}", r"\pagenumbering{gobble}", "",
         *body, "", r"\end{document}", "",

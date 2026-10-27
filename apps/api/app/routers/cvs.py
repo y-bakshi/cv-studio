@@ -7,10 +7,12 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..database import get_db
 from ..dependencies import get_owned_cv
-from ..latex import document_to_tex, initial_document
 from ..models import CVDocument, CVRevision, Compilation, User, utcnow
+from ..resume import Resume
+from ..resume_latex import resume_to_tex
 from ..schemas import CVCreate, CVUpdate
 from ..serializers import cv_payload
+from ..services.resume_store import write_sections
 from ..services.revisions import snapshot_revision
 
 router = APIRouter(prefix="/cvs", tags=["CVs"])
@@ -45,13 +47,13 @@ async def create_cv(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    document = initial_document()
+    blank = Resume()
     cv = CVDocument(
         user_id=user.id,
         title=payload.title,
         folder=payload.folder,
-        document_json=json.dumps(document),
-        tex_source=document_to_tex(document),
+        document_json=blank.to_json(indent=None),
+        tex_source=resume_to_tex(blank),
     )
     db.add(cv)
     db.flush()
@@ -99,11 +101,6 @@ async def update_cv(
         cv.folder = payload.folder
     if payload.starred is not None:
         cv.starred = payload.starred
-    if payload.document is not None:
-        cv.document_json = json.dumps(payload.document)
-        cv.tex_source = document_to_tex(payload.document)
-    if payload.tex_source is not None:
-        cv.tex_source = payload.tex_source
 
     cv.version += 1
     cv.updated_at = utcnow()
@@ -160,11 +157,13 @@ async def restore_revision(
     if revision is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Revision not found")
 
-    cv.document_json = revision.document_json
-    cv.tex_source = revision.tex_source
-    cv.version += 1
-    cv.updated_at = utcnow()
-    snapshot_revision(db, cv)
+    stored = json.loads(revision.document_json)
+    if "contact" not in stored:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This revision predates structured résumés")
+    # Rewrite every section row, then keep the revision's exact LaTeX source.
+    write_sections(
+        db, cv, Resume.model_validate(stored).to_sections(), tex_source=revision.tex_source
+    )
     db.commit()
     db.refresh(cv)
     return cv_payload(cv)

@@ -11,26 +11,11 @@ from httpx import ASGITransport, AsyncClient
 
 from app.database import Base, engine
 from app.main import app
-from app.latex import document_to_tex
 
 
 def setup_module():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
-
-
-def test_formatted_heading_preserves_latex_command_case():
-    document = {
-        "type": "doc",
-        "content": [{
-            "type": "heading",
-            "attrs": {"level": 2},
-            "content": [{"type": "text", "text": "Summary", "marks": [{"type": "bold"}]}],
-        }],
-    }
-    source = document_to_tex(document)
-    assert r"\section{\textbf{Summary}}" in source
-    assert r"\TEXTBF" not in source
 
 
 @pytest.mark.anyio
@@ -44,10 +29,9 @@ async def test_authenticated_cv_revision_annotation_and_job_flow():
     cv = created.json()
     assert "\\documentclass" in cv["tex_source"]
 
-    cv["document"]["content"][2]["content"][0]["text"] = "Professional Summary"
     updated = await client.patch(
         f"/api/cvs/{cv['id']}",
-        json={"document": cv["document"], "expected_version": cv["version"]},
+        json={"title": "Backend CV 2", "expected_version": cv["version"]},
     )
     assert updated.status_code == 200
     assert updated.json()["version"] == 2
@@ -93,7 +77,7 @@ async def test_resume_sections_are_stored_separately_and_loaded_whole():
     cv = (await client.post("/api/cvs", json={"title": "Structured"})).json()
 
     empty = (await client.get(f"/api/cvs/{cv['id']}/resume")).json()
-    assert set(empty["resume"]) == {"contact", "skills", "experience", "projects", "education", "section_order"}
+    assert set(empty["resume"]) == {"contact", "skills", "experience", "projects", "education", "section_order", "style"}
 
     skills = [{"name": "Languages", "skills": ["Python", "Rust"]}]
     saved = await client.put(
@@ -182,3 +166,28 @@ async def test_exports_and_real_pdf_compile():
         tex = (await client.get(f"{base}/tex")).json()["tex_source"]
         ok, log = compile_tex(tex, Path("./test-artifacts/export.pdf"))
         assert ok, log[-2000:]
+
+
+@pytest.mark.anyio
+async def test_style_regenerates_preamble_and_restore_brings_back_sections():
+  async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    await client.post("/api/auth/register", json={"email": "style@example.com", "password": "correct-horse"})
+    cv = (await client.post("/api/cvs", json={"title": "Style"})).json()
+    base = f"/api/cvs/{cv['id']}/resume"
+    v = (await client.get(base)).json()["version"]
+    v = (await client.put(f"{base}/sections/skills", json={"expected_version": v, "data": [{"name": "Langs", "skills": ["Go"]}]})).json()["version"]
+    style = {"template": "compact", "paper": "a4", "font": "serif", "font_size": 11, "accent": "#0b6e4f", "bullet": "dash"}
+    saved = await client.put(f"{base}/sections/style", json={"expected_version": v, "data": style})
+    assert saved.status_code == 200
+    tex = (await client.get(f"{base}/tex")).json()["tex_source"]
+    assert "11pt,a4paper" in tex and "0B6E4F" in tex and "mathptmx" in tex
+    bad = await client.put(f"{base}/sections/style", json={"expected_version": saved.json()["version"], "data": {**style, "accent": "red"}})
+    assert bad.status_code == 422
+
+    v = saved.json()["version"]
+    await client.put(f"{base}/sections/skills", json={"expected_version": v, "data": []})
+    revisions = (await client.get(f"/api/cvs/{cv['id']}/revisions")).json()
+    with_skills = [r for r in revisions if r["version"] == v][0]
+    restored = await client.post(f"/api/cvs/{cv['id']}/revisions/{with_skills['id']}/restore")
+    assert restored.status_code == 200
+    assert (await client.get(base)).json()["resume"]["skills"][0]["skills"] == ["Go"]

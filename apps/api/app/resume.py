@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
@@ -79,6 +79,17 @@ class EducationEntry(_Model):
     bullets: list[str] = Field(default_factory=list, max_length=30)
 
 
+class Style(_Model):
+    """Presentation options for generated LaTeX/Word output (not résumé content)."""
+
+    template: Literal["standard", "compact"] = "standard"
+    paper: Literal["letter", "a4"] = "letter"
+    font: Literal["sans", "serif", "classic"] = "sans"
+    font_size: Literal[10, 11, 12] = 10
+    accent: str = Field(default="#000000", pattern=r"^#[0-9a-fA-F]{6}$")
+    bullet: Literal["dot", "dash", "square"] = "dot"
+
+
 class Resume(_Model):
     """One résumé: the unit the frontend loads, edits and lets users copy."""
 
@@ -89,6 +100,7 @@ class Resume(_Model):
         "projects": list[ProjectEntry],
         "education": list[EducationEntry],
         "section_order": list[str],
+        "style": Style,
     }
     SECTIONS: ClassVar[tuple[str, ...]] = tuple(SECTION_TYPES)
     DEFAULT_ORDER: ClassVar[tuple[str, ...]] = (
@@ -104,6 +116,7 @@ class Resume(_Model):
     projects: list[ProjectEntry] = Field(default_factory=list)
     education: list[EducationEntry] = Field(default_factory=list)
     section_order: list[str] = Field(default_factory=lambda: list(Resume.DEFAULT_ORDER))
+    style: Style = Field(default_factory=Style)
 
     @classmethod
     def validate_section(cls, name: str, data: object) -> object:
