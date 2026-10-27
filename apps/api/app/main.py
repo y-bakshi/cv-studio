@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import Base, engine
-from .routers import annotations, auth, compilations, cvs, health, jobs
+from .routers import annotations, auth, compilations, cvs, health, jobs, resume
 from .services.compilation import shutdown_compiler
 
 
@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
         compilations.router,
         annotations.router,
         jobs.router,
+        resume.router,
     ):
         application.include_router(router, prefix="/api")
     return application

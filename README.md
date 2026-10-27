@@ -18,9 +18,10 @@ The interface combines a document library with an Overleaf-style workspace:
 - Email/password registration and secure, HTTP-only database sessions.
 - User-scoped CV storage and access control.
 - CV library, folders, titles, and starred documents.
-- Tiptap/ProseMirror visual editor with formatting and highlighting.
-- Stable IDs on supported visual document blocks.
-- Generated LaTeX plus an advanced source-editing mode.
+- One structured `Resume` model per CV (contact, skills, experience, projects, education, style), stored as one JSON row per section.
+- Four synchronized ways to edit it: a shadcn/ui visual editor, the whole résumé as JSON, a structured LaTeX dialect, and the compiled PDF preview.
+- LaTeX edits are parsed back into the résumé when they stay inside the `\resume…` dialect; anything else is rejected with a line number.
+- Exports: PDF (`pdflatex`), Word (`.docx`), LaTeX (`.tex`) and JSON, with template, font, size, paper, accent and bullet options.
 - Asynchronous `pdflatex` compilation with timeouts and shell escape disabled.
 - Protected PDF preview and direct server-generated PDF download.
 - Optimistic version checks to prevent silent concurrent overwrites.
@@ -35,6 +36,15 @@ adapter can use Ollama or hosted models to generate reviewable change proposals;
 the user will approve a structured diff before a proposal changes a CV.
 
 ## Technology
+
+### Résumé API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET/PUT /api/cvs/{id}/resume` | Load or replace the whole résumé JSON |
+| `PUT /api/cvs/{id}/resume/sections/{name}` | Replace one section |
+| `GET/PUT /api/cvs/{id}/resume/tex` | Read or edit the structured LaTeX |
+| `GET /api/cvs/{id}/resume/export/{json,tex,docx}` | Download an export (PDF: `POST /compile`) |
 
 | Layer | Technology |
 | --- | --- |

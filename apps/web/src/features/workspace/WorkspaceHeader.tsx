@@ -3,6 +3,7 @@ import {
   Check,
   CircleCheck,
   Download,
+  FileJson,
   FileText,
   History,
   LoaderCircle,
@@ -27,6 +28,7 @@ type WorkspaceHeaderProps = {
   onHistory: () => void
   onSave: () => void
   onCompile: () => void
+  onExport: () => void
 }
 
 export function WorkspaceHeader({
@@ -39,6 +41,7 @@ export function WorkspaceHeader({
   onHistory,
   onSave,
   onCompile,
+  onExport,
 }: WorkspaceHeaderProps) {
   if (!cv) {
     return <header className="topbar"><strong>Select or create a CV</strong></header>
@@ -79,6 +82,7 @@ export function WorkspaceHeader({
         <Tabs value={mode} onValueChange={(value) => onModeChange(value as EditorMode)}>
           <TabsList>
             <TabsTrigger value="visual"><MorphGlyph icon={FileText} />Visual</TabsTrigger>
+            <TabsTrigger value="json"><MorphGlyph icon={FileJson} />JSON</TabsTrigger>
             <TabsTrigger value="tex"><MorphGlyph icon={Braces} />TeX</TabsTrigger>
             <TabsTrigger value="pdf"><MorphGlyph icon={FileText} />PDF</TabsTrigger>
           </TabsList>
@@ -93,13 +97,9 @@ export function WorkspaceHeader({
           <MorphGlyph icon={compileIcon} className={compiling ? 'spin' : undefined} />
           {compiling ? 'Compiling' : 'Recompile'}
         </Button>
-        {cv.latest_compilation?.status === 'success' && (
-          <Button size="sm" asChild>
-            <a href={cv.latest_compilation.download_url || undefined}>
-              <MorphGlyph icon={Download} />Download
-            </a>
-          </Button>
-        )}
+        <Button size="sm" variant="outline" onClick={onExport}>
+          <MorphGlyph icon={Download} />Export
+        </Button>
       </div>
     </header>
   )

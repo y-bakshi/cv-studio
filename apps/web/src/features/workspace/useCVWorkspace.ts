@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import type { ExportFormat } from '@/components/ExportSheet'
 import { api, APIError } from '@/lib/api'
 import type {
   Annotation,
@@ -8,7 +9,10 @@ import type {
   CVSummary,
   EditorMode,
   JobDescription,
+  Resume,
+  ResumeDocument,
   Revision,
+  TexDocument,
   TextSelection,
 } from '@/lib/types'
 
@@ -20,7 +24,9 @@ const EMPTY_SELECTION: TextSelection = { text: '', from: 0, to: 0 }
 export function useCVWorkspace() {
   const [items, setItems] = useState<CVSummary[]>([])
   const [cv, setCV] = useState<CV | null>(null)
-  const [mode, setMode] = useState<EditorMode>('visual')
+  const [resume, setResume] = useState<Resume | null>(null)
+  const [tex, setTex] = useState<TexDocument | null>(null)
+  const [mode, setModeState] = useState<EditorMode>('visual')
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [selection, setSelection] = useState<TextSelection>(EMPTY_SELECTION)
@@ -28,8 +34,15 @@ export function useCVWorkspace() {
   const [jobs, setJobs] = useState<JobDescription[]>([])
   const [revisions, setRevisions] = useState<Revision[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [showExport, setShowExport] = useState(false)
   const [notice, setNotice] = useState('')
+
+  // Latest values for async work; every write is chained so versions never race.
   const saveTimer = useRef<number | undefined>(undefined)
+  const queue = useRef<Promise<unknown>>(Promise.resolve())
+  const version = useRef(0)
+  const pending = useRef<{ resume?: Resume; cv?: CV }>({})
+  const cvId = useRef('')
 
   const notify = useCallback((message: string) => {
     setNotice(message)
@@ -38,6 +51,13 @@ export function useCVWorkspace() {
 
   const refreshList = useCallback(async () => {
     setItems(await api<CVSummary[]>('/api/cvs'))
+  }, [])
+
+  const loadResume = useCallback(async (id: string) => {
+    const data = await api<ResumeDocument>(`/api/cvs/${id}/resume`)
+    version.current = data.version
+    setResume(data.resume)
+    return data
   }, [])
 
   const loadRelatedData = useCallback(async (cvId: string) => {
@@ -51,48 +71,75 @@ export function useCVWorkspace() {
     setRevisions(nextRevisions)
   }, [])
 
-  const save = useCallback(async (snapshot: CV | null = cv): Promise<CV | null> => {
-    if (!snapshot || saving) return snapshot
-    setSaving(true)
-    try {
-      const saved = await api<CV>(`/api/cvs/${snapshot.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          title: snapshot.title,
-          folder: snapshot.folder,
-          document: snapshot.document,
-          tex_source: mode === 'tex' ? snapshot.tex_source : undefined,
-          starred: snapshot.starred,
-          expected_version: snapshot.version,
-        }),
-      })
-      setCV(saved)
-      setDirty(false)
-      await refreshList()
-      return saved
-    } catch (error) {
-      if (error instanceof APIError && error.status === 409) {
-        notify('Conflict detected — reopen the CV before saving')
-      } else {
-        notify(error instanceof Error ? error.message : 'Save failed')
-      }
-      return null
-    } finally {
-      setSaving(false)
+  const fail = useCallback((error: unknown) => {
+    if (error instanceof APIError && error.status === 409) {
+      notify('Conflict detected — reopen the CV before saving')
+    } else {
+      notify(error instanceof Error ? error.message : 'Save failed')
     }
-  }, [cv, mode, notify, refreshList, saving])
+  }, [notify])
+
+  /** Write whatever is pending (résumé content, then title/starred), in order. */
+  const flush = useCallback((): Promise<void> => {
+    window.clearTimeout(saveTimer.current)
+    const run = async () => {
+      const { resume: nextResume, cv: nextCV } = pending.current
+      pending.current = {}
+      if (!nextResume && !nextCV) return
+      setSaving(true)
+      try {
+        if (nextResume) {
+          const saved = await api<ResumeDocument>(`/api/cvs/${cvId.current}/resume`, {
+            method: 'PUT',
+            body: JSON.stringify({ resume: nextResume, expected_version: version.current }),
+          })
+          version.current = saved.version
+          setCV((current) => current ? { ...current, version: saved.version } : current)
+        }
+        if (nextCV) {
+          const saved = await api<CV>(`/api/cvs/${nextCV.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              title: nextCV.title,
+              folder: nextCV.folder,
+              starred: nextCV.starred,
+              expected_version: version.current,
+            }),
+          })
+          version.current = saved.version
+          setCV((current) => current ? { ...current, version: saved.version } : current)
+          await refreshList()
+        }
+        setDirty(Boolean(pending.current.resume || pending.current.cv))
+      } catch (error) {
+        fail(error)
+      } finally {
+        setSaving(false)
+      }
+    }
+    queue.current = queue.current.then(run, run)
+    return queue.current as Promise<void>
+  }, [fail, refreshList])
+
+  const schedule = useCallback(() => {
+    setDirty(true)
+    window.clearTimeout(saveTimer.current)
+    saveTimer.current = window.setTimeout(() => void flush(), AUTO_SAVE_DELAY_MS)
+  }, [flush])
 
   const openCV = useCallback(async (id: string) => {
-    if (dirty) await save()
+    await flush()
     const data = await api<CV>(`/api/cvs/${id}`)
     setCV(data)
+    setTex(null)
     setDirty(false)
+    await loadResume(id)
     await loadRelatedData(id)
-  }, [dirty, loadRelatedData, save])
+  }, [flush, loadRelatedData, loadResume])
 
-  useEffect(() => {
-    refreshList()
-  }, [refreshList])
+  useEffect(() => { cvId.current = cv?.id ?? '' }, [cv?.id])
+
+  useEffect(() => { void refreshList() }, [refreshList])
 
   useEffect(() => {
     if (items.length > 0 && !cv) void openCV(items[0].id)
@@ -107,23 +154,86 @@ export function useCVWorkspace() {
     })
     await refreshList()
     setCV(created)
+    setTex(null)
+    await loadResume(created.id)
     setAnnotations([])
     setJobs([])
-    setRevisions([])
+    setRevisions(await api(`/api/cvs/${created.id}/revisions`))
   }
 
-  const scheduleSave = (next: CV) => {
-    setCV(next)
-    setDirty(true)
-    window.clearTimeout(saveTimer.current)
-    saveTimer.current = window.setTimeout(() => void save(next), AUTO_SAVE_DELAY_MS)
+  /** Edit résumé content from the visual editor (debounced save). */
+  const editResume = (next: Resume) => {
+    if (!cv) return
+    setResume(next)
+    pending.current = { ...pending.current, resume: next }
+    schedule()
   }
 
-  const updateTeX = (next: CV) => {
-    // TeX mode is intentionally explicit: unlike visual edits, raw source waits
-    // for Save so an incomplete command is not persisted mid-keystroke.
+  /** Edit title/starred. */
+  const editCV = (next: CV) => {
     setCV(next)
-    setDirty(true)
+    pending.current = { ...pending.current, cv: next }
+    schedule()
+  }
+
+  const loadTex = useCallback(async () => {
+    if (!cv) return
+    await flush()
+    setTex(await api<TexDocument>(`/api/cvs/${cv.id}/resume/tex`))
+  }, [cv, flush])
+
+  const setMode = (next: EditorMode) => {
+    setModeState(next)
+    if (next === 'tex') void loadTex()
+  }
+
+  /** Apply edited JSON text. Returns an error message, or null on success. */
+  const applyJSON = async (text: string): Promise<string | null> => {
+    if (!cv) return null
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch (error) {
+      return `Invalid JSON: ${(error as Error).message}`
+    }
+    try {
+      await flush()
+      const saved = await api<ResumeDocument>(`/api/cvs/${cv.id}/resume`, {
+        method: 'PUT',
+        body: JSON.stringify({ resume: parsed, expected_version: version.current }),
+      })
+      version.current = saved.version
+      setResume(saved.resume)
+      setTex(null)
+      notify('JSON applied')
+      return null
+    } catch (error) {
+      if (error instanceof APIError && Array.isArray(error.detail)) {
+        const first = error.detail[0] as { loc?: string[]; msg?: string }
+        return `${(first.loc || []).join('.')}: ${first.msg}`
+      }
+      return error instanceof Error ? error.message : 'Could not apply JSON'
+    }
+  }
+
+  /** Apply edited LaTeX. Rejected when it leaves the structured dialect. */
+  const applyTex = async (text: string): Promise<string | null> => {
+    if (!cv) return null
+    try {
+      await flush()
+      const saved = await api<TexDocument>(`/api/cvs/${cv.id}/resume/tex`, {
+        method: 'PUT',
+        body: JSON.stringify({ tex_source: text, expected_version: version.current }),
+      })
+      version.current = saved.version
+      setTex(saved)
+      await loadResume(cv.id)
+      notify('LaTeX applied')
+      return null
+    } catch (error) {
+      if (error instanceof APIError && error.status === 422) return error.message
+      return error instanceof Error ? error.message : 'Could not apply LaTeX'
+    }
   }
 
   const pollCompilation = async (id: string) => {
@@ -135,25 +245,39 @@ export function useCVWorkspace() {
       setCV((current) => current ? { ...current, latest_compilation: item } : current)
       if (item.status === 'success') {
         notify('PDF compiled successfully')
-        return
+        return item
       }
       if (item.status === 'failed') {
         notify('Compilation failed — inspect the log')
-        return
+        return item
       }
     }
     notify('Compilation is taking longer than expected')
+    return null
   }
 
-  const compile = async () => {
+  const compile = async (show = true) => {
+    if (!cv) return null
+    await flush()
+    const item = await api<Compilation>(`/api/cvs/${cv.id}/compile`, { method: 'POST' })
+    setCV((current) => current ? { ...current, latest_compilation: item } : current)
+    if (show) setModeState('pdf')
+    return pollCompilation(item.id)
+  }
+
+  const download = (url: string) => {
+    window.location.assign(url)
+  }
+
+  const exportAs = async (format: ExportFormat) => {
     if (!cv) return
-    const current = dirty ? (await save()) || cv : cv
-    const item = await api<Compilation>(`/api/cvs/${current.id}/compile`, {
-      method: 'POST',
-    })
-    setCV({ ...current, latest_compilation: item })
-    setMode('pdf')
-    void pollCompilation(item.id)
+    await flush()
+    if (format === 'pdf') {
+      const item = await compile(false)
+      if (item?.status === 'success' && item.download_url) download(item.download_url)
+      return
+    }
+    download(`/api/cvs/${cv.id}/resume/export/${format}`)
   }
 
   const annotate = async (note: string) => {
@@ -190,15 +314,9 @@ export function useCVWorkspace() {
     if (value instanceof File) {
       const data = new FormData()
       data.append('file', value)
-      item = await api(`/api/cvs/${cv.id}/job-descriptions/upload`, {
-        method: 'POST',
-        body: data,
-      })
+      item = await api(`/api/cvs/${cv.id}/job-descriptions/upload`, { method: 'POST', body: data })
     } else {
-      item = await api(`/api/cvs/${cv.id}/job-descriptions`, {
-        method: 'POST',
-        body: JSON.stringify(value),
-      })
+      item = await api(`/api/cvs/${cv.id}/job-descriptions`, { method: 'POST', body: JSON.stringify(value) })
     }
     setJobs((current) => [item, ...current])
     notify('Job description saved')
@@ -206,43 +324,25 @@ export function useCVWorkspace() {
 
   const restoreRevision = async (revision: Revision) => {
     if (!cv) return
-    const restored = await api<CV>(
-      `/api/cvs/${cv.id}/revisions/${revision.id}/restore`,
-      { method: 'POST' },
-    )
-    setCV(restored)
-    setDirty(false)
-    setShowHistory(false)
-    setRevisions(await api(`/api/cvs/${cv.id}/revisions`))
-    notify(`Restored version ${revision.version}`)
+    try {
+      await flush()
+      const restored = await api<CV>(`/api/cvs/${cv.id}/revisions/${revision.id}/restore`, { method: 'POST' })
+      setCV(restored)
+      setTex(null)
+      await loadResume(cv.id)
+      setShowHistory(false)
+      setRevisions(await api(`/api/cvs/${cv.id}/revisions`))
+      notify(`Restored version ${revision.version}`)
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Restore failed')
+    }
   }
 
   return {
-    items,
-    cv,
-    mode,
-    dirty,
-    saving,
-    selection,
-    annotations,
-    jobs,
-    revisions,
-    showHistory,
-    notice,
-    setMode,
-    setSelection,
-    setShowHistory,
-    setCV,
-    openCV,
-    createCV,
-    scheduleSave,
-    updateTeX,
-    save,
-    compile,
-    annotate,
-    resolveAnnotation,
-    deleteAnnotation,
-    addJob,
-    restoreRevision,
+    items, cv, resume, tex, mode, dirty, saving, selection, annotations, jobs, revisions,
+    showHistory, showExport, notice,
+    setMode, setSelection, setShowHistory, setShowExport,
+    openCV, createCV, editResume, editCV, flush, applyJSON, applyTex, compile, exportAs,
+    annotate, resolveAnnotation, deleteAnnotation, addJob, restoreRevision,
   }
 }

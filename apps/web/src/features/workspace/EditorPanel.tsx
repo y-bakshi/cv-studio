@@ -1,44 +1,34 @@
 import PDFPreview from '@/components/PDFPreview'
-import VisualEditor from '@/components/VisualEditor'
-import type { CV, EditorMode, TextSelection } from '@/lib/types'
+import ResumeEditor from '@/components/ResumeEditor'
+import SourceEditor from '@/components/SourceEditor'
+import type { CV, EditorMode, Resume, TexDocument, TextSelection } from '@/lib/types'
 
 type EditorPanelProps = {
   cv: CV
+  resume: Resume
+  tex: TexDocument | null
   mode: EditorMode
-  onChange: (cv: CV) => void
-  onTeXChange: (cv: CV) => void
+  onResumeChange: (resume: Resume) => void
+  onApplyJSON: (text: string) => Promise<string | null>
+  onApplyTex: (text: string) => Promise<string | null>
   onSelection: (selection: TextSelection) => void
 }
 
+const slug = (title: string) => title.replace(/[^A-Za-z0-9._-]+/g, '_') || 'resume'
+
 export function EditorPanel({
-  cv,
-  mode,
-  onChange,
-  onTeXChange,
-  onSelection,
+  cv, resume, tex, mode, onResumeChange, onApplyJSON, onApplyTex, onSelection,
 }: EditorPanelProps) {
+  const json = JSON.stringify(resume, null, 2)
   return (
     <section className="editor-panel">
-      {mode === 'visual' && (
-        <VisualEditor
-          content={cv.document}
-          onChange={(document) => onChange({ ...cv, document })}
-          onSelection={(text, from, to) => onSelection({ text, from, to })}
-        />
+      {mode === 'visual' && <ResumeEditor resume={resume} onChange={onResumeChange} onSelection={onSelection} />}
+      {mode === 'json' && (
+        <SourceEditor key={json} kind="json" value={json} filename={`${slug(cv.title)}.json`} onApply={onApplyJSON} />
       )}
-      {mode === 'tex' && (
-        <div className="tex-mode">
-          <div className="mode-warning">
-            Advanced mode: visual edits regenerate TeX. Save source changes before switching modes.
-          </div>
-          <textarea
-            aria-label="LaTeX source"
-            spellCheck={false}
-            value={cv.tex_source}
-            onChange={(event) => onTeXChange({ ...cv, tex_source: event.target.value })}
-          />
-        </div>
-      )}
+      {mode === 'tex' && (tex
+        ? <SourceEditor key={tex.version + tex.tex_source} kind="tex" value={tex.tex_source} filename={`${slug(cv.title)}.tex`} onApply={onApplyTex} />
+        : <div className="pdf-empty"><p>Loading LaTeX…</p></div>)}
       {mode === 'pdf' && <PDFPreview compilation={cv.latest_compilation} />}
     </section>
   )

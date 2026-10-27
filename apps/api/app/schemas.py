@@ -16,8 +16,6 @@ class CVCreate(BaseModel):
 class CVUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=180)
     folder: str | None = Field(default=None, max_length=100)
-    document: dict | None = None
-    tex_source: str | None = Field(default=None, max_length=500_000)
     expected_version: int
     starred: bool | None = None
 
