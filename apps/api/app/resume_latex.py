@@ -38,22 +38,26 @@ DEFAULT_PREAMBLE = r"""\documentclass[10pt,letterpaper]{article}
 \usepackage[scaled=0.92]{helvet}
 \renewcommand{\familydefault}{\sfdefault}
 \setlength{\parindent}{0pt}
-\titleformat{\section}{\bfseries\large\MakeUppercase}{}{0pt}{}[\titlerule]
+\titleformat{\section}{\bfseries\large}{}{0pt}{}[\titlerule]
 \titlespacing{\section}{0pt}{7pt}{3pt}
 \input{glyphtounicode}
 \pdfgentounicode=1"""
 
 MACROS = r"""\newif\ifskillfirst
 \newif\ifcoursefirst
-\newcommand{\resumecontact}[5]{\begin{center}{\LARGE\bfseries #1}\\ #2\\ #3 \textbar\ #4 \textbar\ #5\end{center}}
+\newcommand{\resumedates}[2]{\ifx\relax#1#2\relax\else #1 -- #2\fi}
+\newif\ifcontactfirst
+\newcommand{\resumeline}[1]{\ifx\relax#1\relax\else #1\par\fi}
+\newcommand{\resumepart}[1]{\ifx\relax#1\relax\else\ifcontactfirst\contactfirstfalse\else\ \textbar\ \fi #1\fi}
+\newcommand{\resumecontact}[5]{\begin{center}{\LARGE\bfseries #1}\par\resumeline{#2}\contactfirsttrue\resumepart{#3}\resumepart{#4}\resumepart{#5}\end{center}}
 \newcommand{\resumetag}[1]{{\small #1}\quad}
 \newcommand{\resumelink}[3][]{\href{#3}{#2}\quad}
-\newcommand{\resumesection}[2][]{\section{#2}}
+\newcommand{\resumesection}[2][]{\section{\MakeUppercase{#2}}}
 \newcommand{\skillgroup}[2][]{\par\noindent\textbf{#2:}\ \skillfirsttrue}
 \newcommand{\resumeskill}[1]{\ifskillfirst\skillfirstfalse\else, \fi #1}
-\newcommand{\resumeentry}[7][]{\par\medskip\noindent\textbf{#2}\par\noindent\textit{#3}\hfill #4\ $\cdot$\ #5 -- #6\par #7\par}
-\newcommand{\resumeproject}[7][]{\par\medskip\noindent\textbf{#2} #3\hfill #6 -- #7\par\noindent\textit{#4}\hfill #5\par}
-\newcommand{\resumeeducation}[7][]{\par\medskip\noindent\textbf{#2}\hfill #5 -- #6\par\noindent\textit{#3}\hfill #4\par\ifx\relax#7\relax\else GPA: #7\par\fi\coursefirsttrue}
+\newcommand{\resumeentry}[7][]{\par\medskip\noindent\textbf{#2}\par\noindent\textit{#3}\hfill #4\ $\cdot$\ \resumedates{#5}{#6}\par #7\par}
+\newcommand{\resumeproject}[7][]{\par\medskip\noindent\textbf{#2} #3\hfill\resumedates{#6}{#7}\par\noindent\textit{#4}\hfill #5\par}
+\newcommand{\resumeeducation}[7][]{\par\medskip\noindent\textbf{#2}\hfill\resumedates{#5}{#6}\par\noindent\textit{#3}\hfill #4\par\ifx\relax#7\relax\else GPA: #7\par\fi\coursefirsttrue}
 \newcommand{\resumeachievement}[1]{\par\noindent #1}
 \newcommand{\resumecourse}[1]{\ifcoursefirst\par\noindent\textit{Coursework:} \coursefirstfalse\else, \fi #1}
 \newcommand{\resumebullet}[1]{\par\noindent\hangindent=1.2em\hangafter=1 \textbullet\ #1\par}"""
@@ -114,7 +118,7 @@ def resume_to_tex(resume: Resume, preamble: str | None = None) -> str:
         lines = []
         for group in resume.skills:
             lines.append(_m("skillgroup", group.name, ident=group.id))
-            lines += [_m("resumeskill", skill) for skill in group.skills]
+            lines += [_m("resumeskill", skill) + "%" for skill in group.skills]
         return lines
 
     def experience() -> list[str]:
@@ -136,7 +140,7 @@ def resume_to_tex(resume: Resume, preamble: str | None = None) -> str:
         for e in resume.education:
             lines.append(_m("resumeeducation", e.school, e.degree, e.location, e.start, e.end, e.gpa, ident=e.id))
             lines += [_m("resumeachievement", a) for a in e.achievements]
-            lines += [_m("resumecourse", course) for course in e.coursework]
+            lines += [_m("resumecourse", course) + "%" for course in e.coursework]
             lines += _bullets(e.bullets)
         return lines
 
@@ -182,6 +186,14 @@ _MACROS: dict[str, tuple[int, bool]] = {
     "resumebullet": (1, False),
     "pagenumbering": (1, False),  # emitted by the generator; ignored
 }
+
+
+def extract_preamble(tex: str) -> str | None:
+    """Return the free-form preamble of a dialect file, or None for other TeX."""
+    found = re.search(
+        re.escape(PREAMBLE_BEGIN) + r"\n(.*?)\n?" + re.escape(PREAMBLE_END), tex, re.S
+    )
+    return found.group(1).strip("\n") if found else None
 
 
 @dataclass
@@ -257,11 +269,9 @@ def _tokens(body: str, line_offset: int):
 
 def tex_to_resume(tex: str) -> ParsedTex:
     """Parse dialect LaTeX back into a ``Resume`` (raises ``DialectError``)."""
-    pre = re.search(
-        re.escape(PREAMBLE_BEGIN) + r"\n(.*?)\n?" + re.escape(PREAMBLE_END), tex, re.S
-    )
+    preamble = extract_preamble(tex)
     begin, end = tex.find(r"\begin{document}"), tex.rfind(r"\end{document}")
-    if not pre or begin < 0 or end < begin:
+    if preamble is None or begin < 0 or end < begin:
         raise DialectError("missing preamble markers or document environment")
     body_start = begin + len(r"\begin{document}")
     line_offset = tex.count("\n", 0, body_start)
@@ -329,4 +339,4 @@ def tex_to_resume(tex: str) -> ParsedTex:
         **data,
         "section_order": order,
     })
-    return ParsedTex(resume=resume, preamble=pre.group(1).strip("\n"))
+    return ParsedTex(resume=resume, preamble=preamble)
