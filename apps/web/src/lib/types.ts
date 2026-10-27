@@ -23,8 +23,6 @@ export type Compilation = {
 }
 
 export type CV = CVSummary & {
-  document: Record<string, unknown>
-  tex_source: string
   latest_compilation: Compilation | null
 }
 
@@ -51,13 +49,24 @@ export type JobDescription = {
   created_at: string
 }
 
-export type EditorMode = 'visual' | 'tex' | 'pdf'
+export type EditorMode = 'visual' | 'json' | 'tex' | 'pdf'
 
 export type TextSelection = {
   text: string
   from: number
   to: number
 }
+
+export type ResumeStyle = {
+  template: 'standard' | 'compact'
+  paper: 'letter' | 'a4'
+  font: 'sans' | 'serif' | 'classic'
+  font_size: 10 | 11 | 12
+  accent: string
+  bullet: 'dot' | 'dash' | 'square'
+}
+
+export type SectionName = 'skills' | 'experience' | 'projects' | 'education'
 
 export interface Resume {
   contact: {
@@ -68,7 +77,10 @@ export interface Resume {
   experience: { id: string; company: string; role: string; location: string; start: string; end: string; summary: string; bullets: string[] }[]
   projects: { id: string; name: string; link_text: string; organization: string; location: string; start: string; end: string; bullets: string[] }[]
   education: { id: string; school: string; degree: string; location: string; start: string; end: string; gpa: string; achievements: string[]; coursework: string[]; bullets: string[] }[]
-  section_order: string[]
+  section_order: SectionName[]
+  style: ResumeStyle
 }
 
 export interface ResumeDocument { id: string; version: number; resume: Resume }
+
+export interface TexDocument { id: string; version: number; tex_source: string; preamble: string | null }

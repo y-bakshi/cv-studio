@@ -64,6 +64,7 @@ DEFAULT_PREAMBLE = build_preamble(Style())
 MACROS = r"""\providecommand{\resumebulletmark}{\textbullet}
 \newif\ifskillfirst
 \newif\ifcoursefirst
+\newcommand{\resumemeta}[3]{#1\ifx\relax#1\relax\else\ifx\relax#2#3\relax\else\ \textperiodcentered\ \fi\fi\resumedates{#2}{#3}}
 \newcommand{\resumedates}[2]{\ifx\relax#1#2\relax\else #1 -- #2\fi}
 \newif\ifcontactfirst
 \newcommand{\resumeline}[1]{\ifx\relax#1\relax\else #1\par\fi}
@@ -74,7 +75,7 @@ MACROS = r"""\providecommand{\resumebulletmark}{\textbullet}
 \newcommand{\resumesection}[2][]{\section{\MakeUppercase{#2}}}
 \newcommand{\skillgroup}[2][]{\par\noindent\textbf{#2:}\ \skillfirsttrue}
 \newcommand{\resumeskill}[1]{\ifskillfirst\skillfirstfalse\else, \fi #1}
-\newcommand{\resumeentry}[7][]{\par\medskip\noindent\textbf{#2}\par\noindent\textit{#3}\hfill #4\ $\cdot$\ \resumedates{#5}{#6}\par #7\par}
+\newcommand{\resumeentry}[7][]{\par\medskip\noindent\textbf{#2}\par\noindent\textit{#3}\hfill\resumemeta{#4}{#5}{#6}\par #7\par}
 \newcommand{\resumeproject}[7][]{\par\medskip\noindent\textbf{#2} #3\hfill\resumedates{#6}{#7}\par\noindent\textit{#4}\hfill #5\par}
 \newcommand{\resumeeducation}[7][]{\par\medskip\noindent\textbf{#2}\hfill\resumedates{#5}{#6}\par\noindent\textit{#3}\hfill #4\par\ifx\relax#7\relax\else GPA: #7\par\fi\coursefirsttrue}
 \newcommand{\resumeachievement}[1]{\par\noindent #1}

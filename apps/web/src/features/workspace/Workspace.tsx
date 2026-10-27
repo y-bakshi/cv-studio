@@ -1,4 +1,5 @@
 import Assistant from '@/components/Assistant'
+import ExportSheet from '@/components/ExportSheet'
 import Library from '@/components/Library'
 import { Button } from '@/components/ui/button'
 import type { User } from '@/lib/types'
@@ -33,10 +34,11 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
           dirty={workspace.dirty}
           saving={workspace.saving}
           onModeChange={workspace.setMode}
-          onChange={workspace.scheduleSave}
+          onChange={workspace.editCV}
           onHistory={() => workspace.setShowHistory(true)}
-          onSave={() => void workspace.save()}
+          onSave={() => void workspace.flush()}
           onCompile={() => void workspace.compile()}
+          onExport={() => workspace.setShowExport(true)}
         />
 
         <div className="workbody">
@@ -47,13 +49,16 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
               <p>Your revisions, annotations, source, and compiled PDFs stay together.</p>
               <Button onClick={() => void workspace.createCV()}>Create CV</Button>
             </section>
-          ) : (
+          ) : !workspace.resume ? null : (
             <>
               <EditorPanel
                 cv={workspace.cv}
+                resume={workspace.resume}
+                tex={workspace.tex}
                 mode={workspace.mode}
-                onChange={workspace.scheduleSave}
-                onTeXChange={workspace.updateTeX}
+                onResumeChange={workspace.editResume}
+                onApplyJSON={workspace.applyJSON}
+                onApplyTex={workspace.applyTex}
                 onSelection={workspace.setSelection}
               />
               <Assistant
@@ -69,6 +74,15 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
           )}
         </div>
 
+        {workspace.resume && (
+          <ExportSheet
+            open={workspace.showExport}
+            style={workspace.resume.style}
+            onOpenChange={workspace.setShowExport}
+            onStyleChange={(style) => workspace.editResume({ ...workspace.resume!, style })}
+            onExport={(format) => void workspace.exportAs(format)}
+          />
+        )}
         <RevisionHistory
           open={workspace.showHistory}
           revisions={workspace.revisions}
